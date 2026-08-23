@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Analyst Agent — Ajinkya Wadaskar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+
+  <meta property="og:title" content="Data Analyst Agent — Ajinkya Wadaskar">
+  <meta property="og:description" content="NL-to-SQL agent over BigQuery with AST-level guardrails. 315x schema compression, 5/5 adversarial prompts blocked.">
+  <meta property="og:image" content="https://ajinkyawadaskar.github.io/og-preview.png">
+  <meta property="og:url" content="https://ajinkyawadaskar.github.io/projects/data-analyst-agent.html">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand"><a href="/"><span>~/</span>ajinkya-wadaskar</a></div>
+  <ul class="nav-links">
+    <li><a href="/">← Home</a></li>
+    <li><a href="/#projects">Projects</a></li>
+    <li><a href="/#contact">Contact</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<div class="case-hero">
+  <div class="breadcrumb">
+    <a href="/">~</a><span class="sep">/</span><a href="/#projects">projects</a><span class="sep">/</span>data-analyst-agent
+  </div>
+
+  <span class="badge badge-live">LIVE</span>
+  <h1 class="case-title">Data Analyst Agent</h1>
+  <p class="case-subtitle">
+    Natural language to SQL over BigQuery — with a guardrail layer that parses every generated query and decides whether it's allowed to run at all.
+  </p>
+
+  <div class="cta-bar">
+    <a href="[STREAMLIT_URL_DATA_ANALYST]" target="_blank" rel="noopener" class="btn btn-primary">Try the Demo</a>
+    <a href="https://github.com/ajinkyawadaskar/data-analyst-agent" target="_blank" rel="noopener" class="btn btn-secondary">GitHub</a>
+    <a href="https://data-analyst-agent-production-316b.up.railway.app/health" target="_blank" rel="noopener" class="btn btn-secondary">Live API</a>
+  </div>
+</div>
+
+<!-- THE PROBLEM -->
+<div class="case-section">
+  <div class="section-label">// the problem</div>
+  <hr class="divider">
+
+  <p>
+    Getting an LLM to write SQL is easy. Every model does it competently now.
+  </p>
+  <p>
+    The part nobody demos is what happens when it writes something wrong — and "wrong" has a wide range. It can invent a column that doesn't exist. It can reach for a table you never meant to expose. It can write a perfectly valid query that scans six gigabytes because it forgot a date filter. Or it can write <strong>DROP TABLE</strong> at the end of something that looked fine.
+  </p>
+  <p>
+    You can ask a model nicely not to do those things. That lowers the rate. It doesn't bound it. This project is the other half: parse every generated query before it runs, check it against rules that don't depend on the model cooperating, and refuse the ones that fail.
+  </p>
+</div>
+
+<!-- ARCHITECTURE -->
+<div class="case-section">
+  <div class="section-label">// architecture</div>
+  <hr class="divider">
+
+  <p>The agent turns a question into SQL, then five checks run before anything touches BigQuery. If a check fails, the violation goes back to the model for a retry — twice, then it stops and tells you why.</p>
+
+  <div class="mermaid-container">
+    <pre class="mermaid">
+flowchart TD
+    Q["Question\n(plain English)"] --> GEN
+
+    subgraph startup["at startup, once"]
+        INTRO["introspect BigQuery\n10 tables · 417 columns"] --> COMPACT["compact\nschema context"]
+    end
+
+    COMPACT -.->|schema in prompt| GEN
+    GEN["generate SQL\nGemini 3.1 Flash Lite"] --> G1
+
+    subgraph guard["guardrail layer — the point of the project"]
+        G1["AST parse\nsingle statement, SELECT only"] --> G2
+        G2["table allowlist"] --> G3
+        G3["column validation\nagainst schema context"] --> G4
+        G4["row limit"] --> C1
+        C1["dry run\nbytes scanned vs ceiling"]
+    end
+
+    G1 -->|violation| RETRY
+    G2 -->|violation| RETRY
+    G3 -->|violation| RETRY
+    C1 -->|over ceiling| RETRY
+
+    RETRY{"retries left?\nmax 2"}
+    RETRY -->|yes, with violations| GEN
+    RETRY -->|no| BLOCKED["blocked\nreport why"]
+
+    C1 -->|under ceiling| EXEC["execute on BigQuery\nrow-capped"]
+    EXEC --> EXPLAIN["explain rows\nin plain English"]
+    EXPLAIN --> OUT["answer + SQL +\nguardrail report"]
+    </pre>
+  </div>
+</div>
+
+<!-- THE HARDEST DECISION -->
+<div class="case-section">
+  <div class="section-label">// the hardest decision</div>
+  <hr class="divider">
+
+  <div class="decision-block">
+    <h3>Why AST parsing instead of regex or a prompt instruction</h3>
+    <p>
+      A prompt instruction ("never write DELETE") reduces the rate of bad SQL. It doesn't bound it — the model can still produce whatever it wants.
+    </p>
+    <p>
+      A regex can be fooled by comments, string literals, or CTEs. <code>DELETE</code> inside a comment is harmless; <code>DELETE</code> inside a CTE is not. A regex can't tell the difference.
+    </p>
+    <p>
+      An AST parse with <strong>sqlglot</strong> sees the actual statement type regardless of how it's formatted — <code>DELETE</code> buried inside a CTE gets caught because the parser sees a <code>Delete</code> node, not because a pattern matched a string. The check is on the structure, not the text, which is what makes it a bound rather than a rate reduction.
+    </p>
+  </div>
+</div>
+
+<!-- NUMBERS -->
+<div class="case-section">
+  <div class="section-label">// numbers</div>
+  <hr class="divider">
+
+  <p><strong>Schema compression</strong> — the first win was noticing the schema was duplicated, not the clever part.</p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th></th><th>Tables</th><th>Columns</th><th>Tokens</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>thelook_ecommerce</td><td class="num">7</td><td class="num">75</td><td class="num">488</td></tr>
+        <tr><td>GA, naive (366 shards)</td><td class="num">366</td><td class="num">123,708</td><td class="num">1,235,616</td></tr>
+        <tr><td>GA, collapsed to wildcard</td><td class="num">1</td><td class="num">338</td><td class="num">3,376</td></tr>
+        <tr><td><strong>Full corpus as sent to the model</strong></td><td class="num">10</td><td class="num">417</td><td class="num">3,921</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Google Analytics stores each day as its own table — 366 of them, every one with the same 338 columns. Describing all of that comes to <strong>1,235,616 tokens</strong>. BigQuery already treats those tables as one thing via a wildcard, so describing one shard drops the whole corpus to <strong>3,921 tokens</strong>. 315x smaller, nothing lost.</p>
+
+  <p style="margin-top: 2rem;"><strong>Cost ceiling</strong> — dry-run measurements, not estimates.</p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th>Query</th><th>Bytes</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>SELECT *</code> all GA shards, no date filter</td><td class="num">5.767 GB</td><td class="block">blocked</td></tr>
+        <tr><td><code>SELECT *</code> GA, one month</td><td class="num">0.794 GB</td><td class="pass">passes</td></tr>
+        <tr><td><code>SELECT COUNT(*)</code> all GA shards</td><td class="num">0.000 GB</td><td class="pass">passes</td></tr>
+        <tr><td><code>SELECT *</code> thelook.events (2.4M rows)</td><td class="num">0.384 GB</td><td class="pass">passes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><code>COUNT(*)</code> across every shard is free — BigQuery answers it from metadata. A guard that counted tables instead of bytes would block a query that costs nothing. Bytes is the right signal.</p>
+
+  <p style="margin-top: 2rem;"><strong>Accuracy</strong></p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th>Metric</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Execution accuracy across 25 questions</td><td class="num">5/25 (20%)</td></tr>
+        <tr><td>Adversarial prompts blocked</td><td class="num">5/5 (100%)</td></tr>
+        <tr><td>Average retries per question</td><td class="num">0.96</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    Scored by comparing result sets, not SQL strings — two different queries can both be correct, and a string comparison would fail the valid one.
+  </p>
+  <p>
+    The 20% accuracy reflects <strong>Gemini 3.1 Flash Lite on the free tier</strong> — a lightweight model that struggles with complex joins and GA's nested schema. The number that matters for this project is the second one: every adversarial prompt was caught, and nothing dangerous reached BigQuery.
+  </p>
+</div>
+
+<!-- WHAT DIDN'T WORK -->
+<div class="case-section">
+  <div class="section-label">// what didn't work</div>
+  <hr class="divider">
+
+  <div class="failure-block">
+    <h3>A guardrail that failed open</h3>
+    <p>
+      Column validation looked up each table's columns from the schema context. If the lookup came back empty, the code treated that as "I don't know this table" and skipped the check.
+    </p>
+    <p>
+      The lookup was broken — wrong data structure, so it came back empty every time. Column validation silently never ran, and a query selecting a column that doesn't exist passed all four checks and reported clean.
+    </p>
+    <p>
+      The bug was a one-liner. The lesson wasn't. <strong>A guardrail that skips when it's confused is worse than one that doesn't exist</strong>, because it reports success. Any check that can't complete has to fail closed.
+    </p>
+  </div>
+</div>
+
+<!-- LINKS -->
+<div class="bottom-links">
+  <a href="[STREAMLIT_URL_DATA_ANALYST]" target="_blank" rel="noopener" class="btn btn-primary">Try the Demo</a>
+  <a href="https://github.com/ajinkyawadaskar/data-analyst-agent" target="_blank" rel="noopener" class="btn btn-secondary">GitHub</a>
+  <a href="https://data-analyst-agent-production-316b.up.railway.app/health" target="_blank" rel="noopener" class="btn btn-secondary">Live API</a>
+  <a href="https://github.com/ajinkyawadaskar/data-analyst-agent/blob/main/docs/architecture.md" target="_blank" rel="noopener" class="btn btn-secondary">Architecture Doc</a>
+</div>
+
+<footer>
+  <span>built with intention · ajinkya wadaskar · 2025</span>
+</footer>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#21262D',
+      primaryBorderColor: '#30363D',
+      primaryTextColor: '#E6EDF3',
+      lineColor: '#8B949E',
+      secondaryColor: '#161B22',
+      tertiaryColor: '#0D1117'
+    }
+  });
+</script>
+
+</body>
+</html>

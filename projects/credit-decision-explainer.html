@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Credit Decision Explainer — Ajinkya Wadaskar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+
+  <meta property="og:title" content="Credit Decision Explainer — Ajinkya Wadaskar">
+  <meta property="og:description" content="XGBoost + SHAP + LLM agent for FCRA-compliant rejection letters. Zero phantom reasons, zero wrong-direction citations.">
+  <meta property="og:image" content="https://ajinkyawadaskar.github.io/og-preview.png">
+  <meta property="og:url" content="https://ajinkyawadaskar.github.io/projects/credit-decision-explainer.html">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand"><a href="/"><span>~/</span>ajinkya-wadaskar</a></div>
+  <ul class="nav-links">
+    <li><a href="/">← Home</a></li>
+    <li><a href="/#projects">Projects</a></li>
+    <li><a href="/#contact">Contact</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<div class="case-hero">
+  <div class="breadcrumb">
+    <a href="/">~</a><span class="sep">/</span><a href="/#projects">projects</a><span class="sep">/</span>credit-decision-explainer
+  </div>
+
+  <span class="badge badge-live">LIVE</span>
+  <h1 class="case-title">Credit Decision Explainer Agent</h1>
+  <p class="case-subtitle">
+    A loan model that explains its own rejections, plus a checker that catches the AI when it starts making things up.
+  </p>
+
+  <div class="cta-bar">
+    <a href="[STREAMLIT_URL_CREDIT]" target="_blank" rel="noopener" class="btn btn-primary">Try the Demo</a>
+    <a href="https://github.com/ajinkyawadaskar/credit-decision-explainer" target="_blank" rel="noopener" class="btn btn-secondary">GitHub</a>
+    <a href="https://web-production-7b272.up.railway.app/health" target="_blank" rel="noopener" class="btn btn-secondary">Live API</a>
+  </div>
+</div>
+
+<!-- THE PROBLEM -->
+<div class="case-section">
+  <div class="section-label">// the problem</div>
+  <hr class="divider">
+
+  <p>
+    If a bank rejects your loan application, they legally have to tell you why. Specific reasons, not hand-waving. In the US that's ECOA and FCRA, and the letter is called an adverse action notice.
+  </p>
+  <p>
+    The obvious build is: take the model's output, hand it to an LLM, ask for a nice letter. I tried a version of that early on and it's genuinely scary how well it fails. The system knew one thing: the applicant asked for a 45-month term. What came back was:
+  </p>
+  <div class="decision-block" style="border-left-color: #FF6B6B;">
+    <p style="font-style: italic;">
+      "your 45-month term, combined with your limited employment history and recent credit inquiries..."
+    </p>
+  </div>
+  <p>
+    Employment history had nothing to do with this person's rejection. Credit inquiries aren't even in the dataset. <strong>The model invented two reasons out of thin air</strong>, wrote them in confident banking English, and dropped them into a legal document. Nobody receiving that letter could possibly know.
+  </p>
+  <p>
+    That's the thing I built this to prevent. Not "make it less likely" — actually prevent.
+  </p>
+</div>
+
+<!-- ARCHITECTURE -->
+<div class="case-section">
+  <div class="section-label">// architecture</div>
+  <hr class="divider">
+
+  <p>Five steps. The LLM only shows up at step four, and step five checks its homework. Green is plain code that does the same thing every time. Orange is the LLM — the only part that can surprise you. It's sandwiched: something deterministic picks what goes in, and something deterministic checks what comes out.</p>
+
+  <div class="mermaid-container">
+    <pre class="mermaid">
+flowchart TD
+    A["Loan application\n17 facts"] --> B{"Pydantic\nvalidation"}
+    B -->|invalid| B1["422 rejected\nbad values, or a field\nwe're not allowed to use"]
+    B -->|valid| C["XGBoost\nhow risky is this person?"]
+    C --> D["SHAP\nwhich facts pushed the score,\nand by how much"]
+    D --> E{"risky enough\nto decline?"}
+    E -->|no| F["APPROVE\nnothing to explain"]
+    E -->|yes| G["reason_mapper\nPLAIN CODE"]
+
+    G --> G1["drop anything that helped them"]
+    G1 --> G2["drop anything too small to matter"]
+    G2 --> G3["drop what we can't legally cite\n7 features, plus the\n'paid on time' case"]
+    G3 --> G4["keep the top 4\neach tagged with the fact\nand number behind it"]
+
+    G4 --> H["graph.py render\nGemini\nsees ONLY the chosen reasons"]
+    H --> I{"validator.py\nPLAIN CODE"}
+    I -->|passes| J["Rejection letter"]
+    I -->|caught something, try again| H
+    I -->|still wrong, give up on it| K["FALLBACK\nsend the plain text as-is"]
+    K --> J
+    </pre>
+  </div>
+</div>
+
+<!-- THE HARDEST DECISION -->
+<div class="case-section">
+  <div class="section-label">// the hardest decision</div>
+  <hr class="divider">
+
+  <div class="decision-block">
+    <h3>Plain code picks the reasons, the LLM only words them</h3>
+    <p>
+      Most projects that mix LLMs with explainability let the model generate the reasons directly. That sounds fine until you realise there's nothing left to check the answer against. There is no list to compare against.
+    </p>
+    <p>
+      Splitting "pick the reasons" from "write the reasons" is what makes verification possible at all. By the time the LLM runs, the decision is made, the SHAP drivers are locked, and the reason mapper has already filtered to what's legally citable. The LLM is a wording layer. If it goes off-script, the validator catches it and the applicant gets the plain-text version instead.
+    </p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1.5rem;">
+    <h3>Blocked bad mappings instead of forcing them</h3>
+    <p>
+      "Loan purpose" is what you want the money for. It is not collateral. I could have mapped it to "collateral not sufficient" and it would read perfectly naturally — and it would be a fabricated claim about a security interest that doesn't exist.
+    </p>
+    <p>
+      A wrong-but-believable reason is worse than no reason, because the person reading it has no way to push back. <strong>Seven features are blocked outright</strong> on that basis, including the "paid on time" case: the model wanted to reject people for having no missed payments, which is mathematically correct but legally unusable as an adverse action reason.
+    </p>
+  </div>
+</div>
+
+<!-- NUMBERS -->
+<div class="case-section">
+  <div class="section-label">// numbers</div>
+  <hr class="divider">
+
+  <p><strong>The model</strong></p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th>Metric</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>ROC AUC (held-out)</td><td class="num">0.8046</td></tr>
+        <tr><td>ROC AUC (5-seed cross-val)</td><td class="num">0.8089 ± 0.0220</td></tr>
+        <tr><td>Range across seeds</td><td class="num">0.7725 – 0.8399</td></tr>
+        <tr><td>Decline recall @ 0.5</td><td class="num">52%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>The spread matters: on 1,000 rows, reshuffle which rows land in the test set and the score moves by 0.07. If someone tunes this and beats it by 0.01, that's noise.</p>
+
+  <p style="margin-top: 2rem;"><strong>The explanation layer</strong> — the two zeros are the entire point.</p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th>Check</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>SHAP maths verified against model output</td><td class="num">200 / 200 applicants</td></tr>
+        <tr><td>Features with an explicit decision about them</td><td class="num">17 / 17</td></tr>
+        <tr><td>Features blocked as never citable</td><td class="num">7</td></tr>
+        <tr><td>Rejections where nobody got a reason</td><td class="num">0 / 46</td></tr>
+        <tr><td>Reasons citing something that wasn't a factor</td><td class="num" style="color: var(--green);">0</td></tr>
+        <tr><td>Reasons citing something that actually helped them</td><td class="num" style="color: var(--green);">0</td></tr>
+        <tr><td>Same input, same output, every time</td><td class="pass">yes</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top: 2rem;"><strong>End to end, with the LLM in the loop</strong> — 10 test cases, 5 built to trip it up, Gemini 3.6 Flash.</p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th>Check</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Every reason legitimate</td><td class="num">10 / 10</td></tr>
+        <tr><td>Checker rejected the LLM</td><td class="num">0 times</td></tr>
+        <tr><td>Fell back to plain text</td><td class="num">0 times</td></tr>
+        <tr><td>Reasons quietly lost when LLM merged bullets</td><td class="num" style="color: var(--amber);">1 of 8 rejections</td></tr>
+        <tr><td>Speed</td><td class="num">13s typical, 34s worst</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top: 2rem;"><strong>Now the caveats on that 10/10</strong> — a clean sweep is exactly when you should be suspicious.</p>
+
+  <ul class="caveats">
+    <li><strong>The checker has never actually caught a real lie.</strong> I fed it 12 fake bad inputs by hand and it caught all 12. But across the real runs the LLM behaved itself, so the rejection path has never fired in anger. That tells you the LLM was well-behaved on ten cases. It doesn't tell you the checker works when it matters.</li>
+    <li><strong>The checker only knows about things that exist.</strong> It spots the LLM misusing a real feature. It does not spot the LLM inventing something new. I probed it with eight made-up phrases — it caught "employment history", "job type" and "housing situation". It sailed straight past "recent credit inquiries", "bankruptcy filing", "collection account", "debt-to-income ratio" and "payment history." Those are exactly the phrases an LLM reaches for.</li>
+    <li><strong>Nothing checks whether reasons go missing.</strong> One case picked four reasons and the LLM wrote three, quietly folding two similar ones together. Everything it printed was true. One just disappeared. Legally, dropping a real reason is arguably worse than adding a fake one.</li>
+    <li><strong>Two of the three metrics never ran.</strong> Google's free tier is 20 requests. One eval run eats that almost immediately. Both LLM-judged metrics are wired up correctly and fail on billing, not code.</li>
+  </ul>
+</div>
+
+<!-- WHAT DIDN'T WORK -->
+<div class="case-section">
+  <div class="section-label">// what didn't work</div>
+  <hr class="divider">
+
+  <div class="failure-block">
+    <h3>My own tests nearly reported a hallucination that never happened</h3>
+    <p>
+      Each test case stored the applicant's top 6 contributing factors as ground truth. But because seven features are blocked as uncitable, the reason picker sometimes digs down to the 8th-ranked factor to fill its four slots. Four applicants would have had a completely honest reason flagged as fabricated.
+    </p>
+    <p>
+      <strong>Worst kind of testing bug. Not one that misses a problem — one that manufactures one.</strong> And the instinctive fix, relaxing the standard from 100%, would have gutted the core guarantee to solve something that was never broken.
+    </p>
+    <p>
+      An eval case named after a failure mode does not necessarily exercise that failure mode. Both defects would have silently inflated the final numbers.
+    </p>
+  </div>
+</div>
+
+<!-- LINKS -->
+<div class="bottom-links">
+  <a href="[STREAMLIT_URL_CREDIT]" target="_blank" rel="noopener" class="btn btn-primary">Try the Demo</a>
+  <a href="https://github.com/ajinkyawadaskar/credit-decision-explainer" target="_blank" rel="noopener" class="btn btn-secondary">GitHub</a>
+  <a href="https://web-production-7b272.up.railway.app/health" target="_blank" rel="noopener" class="btn btn-secondary">Live API</a>
+  <a href="https://github.com/ajinkyawadaskar/credit-decision-explainer/blob/main/docs/architecture.md" target="_blank" rel="noopener" class="btn btn-secondary">Architecture Doc</a>
+</div>
+
+<footer>
+  <span>built with intention · ajinkya wadaskar · 2025</span>
+</footer>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#21262D',
+      primaryBorderColor: '#30363D',
+      primaryTextColor: '#E6EDF3',
+      lineColor: '#8B949E',
+      secondaryColor: '#161B22',
+      tertiaryColor: '#0D1117'
+    }
+  });
+</script>
+
+</body>
+</html>

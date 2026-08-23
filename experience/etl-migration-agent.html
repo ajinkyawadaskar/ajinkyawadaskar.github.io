@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ETL Migration Agent — Ajinkya Wadaskar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+
+  <meta property="og:title" content="ETL Migration Agent — Ajinkya Wadaskar">
+  <meta property="og:description" content="LLM-powered Alteryx to BigQuery migration at Ford. ~80% manual effort eliminated.">
+  <meta property="og:image" content="https://ajinkyawadaskar.github.io/og-preview.png">
+  <meta property="og:url" content="https://ajinkyawadaskar.github.io/experience/etl-migration-agent.html">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-brand"><a href="/"><span>~/</span>ajinkya-wadaskar</a></div>
+  <ul class="nav-links">
+    <li><a href="/">← Home</a></li>
+    <li><a href="/#experience">Experience</a></li>
+    <li><a href="/#contact">Contact</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<div class="case-hero">
+  <div class="breadcrumb">
+    <a href="/">~</a><span class="sep">/</span><a href="/#experience">experience</a><span class="sep">/</span>etl-migration-agent
+  </div>
+
+  <span class="badge badge-prod">PRODUCTION · FORD</span>
+  <h1 class="case-title">LLM-Powered ETL Migration Agent</h1>
+  <p class="case-subtitle">
+    How I approached translating legacy Alteryx ETL workflows into production BigQuery SQL and Dataform DAGs at Ford Motor Company.
+  </p>
+</div>
+
+<!-- THE APPROACH -->
+<div class="writeup-section">
+  <div class="section-label">// the approach</div>
+  <hr class="divider">
+
+  <p>
+    Ford was modernizing off a legacy analytics stack. Hundreds of Alteryx workflows — visual, drag-and-drop ETL — needed to become BigQuery SQL and Dataform DAGs. Manual translation was the default: open each workflow, reverse-engineer the logic, rewrite it. At the scale of the backlog, that was a multi-year effort.
+  </p>
+  <p>
+    I built an agentic pipeline using <strong>LangChain + GPT-4</strong> that automated the bulk of the translation. The agent parsed Alteryx workflow definitions, identified transformation patterns (joins, filters, aggregations, formulas), and generated equivalent BigQuery SQL. It also produced Dataform dependency graphs so the migrated pipelines slotted into the existing orchestration layer.
+  </p>
+</div>
+
+<!-- WHAT WAS AUTOMATED VS WHAT WASN'T -->
+<div class="writeup-section">
+  <div class="section-label">// what was automated vs. what wasn't</div>
+  <hr class="divider">
+
+  <p><strong>The LLM handled well:</strong></p>
+  <ul>
+    <li>Standard transformations — joins, filters, aggregations, column renames, type casts</li>
+    <li>Formula translation from Alteryx expression syntax to BigQuery SQL functions</li>
+    <li>Dependency graph construction — identifying upstream/downstream relationships for Dataform DAGs</li>
+    <li>Boilerplate generation — table definitions, incremental configs, assertion stubs</li>
+  </ul>
+
+  <p style="margin-top: 1.5rem;"><strong>What still required human judgment:</strong></p>
+  <ul>
+    <li>Complex business logic embedded in workflow annotations or naming conventions that varied by author</li>
+    <li>Edge cases in date handling and type coercion where Alteryx and BigQuery disagree on defaults</li>
+    <li>Semantic equivalence validation — the generated SQL could be syntactically correct but logically different</li>
+    <li>Stakeholder sign-off on whether a transformation was still needed or could be simplified during migration</li>
+  </ul>
+</div>
+
+<!-- WHY THIS APPROACH -->
+<div class="writeup-section">
+  <div class="section-label">// why an LLM instead of a rule-based transpiler</div>
+  <hr class="divider">
+
+  <p>
+    Alteryx workflows encode logic visually with implicit conventions that vary by author. Two analysts might implement the same transformation in structurally different ways — different tool ordering, different intermediate steps, different formula styles. A rule-based transpiler would need to handle every variant explicitly.
+  </p>
+  <p>
+    The LLM generalizes across patterns while the human validates the output. This is the same "LLM as draft, human as validator" pattern I used in the portfolio projects, applied at a different scale.
+  </p>
+  <p>
+    <strong>Result:</strong> ~80% of manual migration effort eliminated. The remaining 20% was the judgment-heavy work that needed a human regardless.
+  </p>
+
+  <div class="disclaimer">
+    This was proprietary work at Ford Motor Company. I can describe the approach, methodology, and architecture patterns, but cannot share code, internal data, or specific pipeline details.
+  </div>
+</div>
+
+<div class="bottom-links">
+  <a href="/" class="btn btn-secondary">← Back to Home</a>
+  <a href="/#experience" class="btn btn-secondary">Experience</a>
+</div>
+
+<footer>
+  <span>built with intention · ajinkya wadaskar · 2025</span>
+</footer>
+
+</body>
+</html>
