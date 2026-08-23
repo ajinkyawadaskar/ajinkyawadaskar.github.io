@@ -1,9 +1,10 @@
 # ajinkyawadaskar.github.io
 
-Personal site. Plain HTML and CSS, no build step.
+Personal site. Single-file HTML + CSS, no build step.
 
-Edit `index.html` and push — GitHub Pages serves it from `main` at the repo root.
+To add a project, copy a `.project-card` block in the Projects section.
+Numbers on the cards should only ever be ones measured and published in the
+linked repos.
 
-To add a project, copy an `<article class="proj">` block in the Work section and
-change the text. Numbers on this page should only ever be ones already measured
-and published in the linked repos.
+`index-alt-typographic.html` is an alternate light/dark typographic layout,
+kept for reference. Not served.
