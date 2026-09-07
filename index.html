@@ -120,9 +120,9 @@
         <div class="project-icon">🛡️</div>
         <span class="badge badge-live">LIVE</span>
       </div>
-      <div class="project-name">Guardrailed Natural Language to SQL Agent</div>
+      <div class="project-name">Governed Text-to-SQL Agent with a Semantic Execution Gateway</div>
       <div class="project-desc">
-        NL-to-SQL agent over BigQuery with an AST-level guardrail layer that parses every generated query before it runs. Extended with a semantic execution gateway — the LLM picks a metric off a certified list, a deterministic compiler writes the SQL, and an off-model question fails to compile instead of running. Accuracy 32% → 48% on the same eval set, 5/5 adversarial prompts blocked both ways.
+        The LLM never writes SQL. It picks a metric from a certified glossary, a deterministic compiler builds the query, and an off-model question fails to compile instead of guessing. Two paths — structured (compiled SQL) and unstructured (vector retrieval) — merge in a synthesis layer with full audit trails. 32% → 48% accuracy on the same eval set, 17/18 on targeted evals.
       </div>
       <div class="tech-chips">
         <span class="chip">Python</span>

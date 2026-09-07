@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Guardrailed Natural Language to SQL Agent — Ajinkya Wadaskar</title>
+  <title>Governed Text-to-SQL Agent — Ajinkya Wadaskar</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 
-  <meta property="og:title" content="Guardrailed Natural Language to SQL Agent — Ajinkya Wadaskar">
-  <meta property="og:description" content="NL-to-SQL agent over BigQuery with AST-level guardrails. 315x schema compression, 5/5 adversarial prompts blocked.">
+  <meta property="og:title" content="Governed Text-to-SQL Agent with a Semantic Execution Gateway — Ajinkya Wadaskar">
+  <meta property="og:description" content="The LLM never writes SQL. It picks a metric from a certified list, a deterministic compiler builds the query, and an off-model question fails to compile. 32% → 48% accuracy, 17/18 on targeted evals.">
   <meta property="og:image" content="https://ajinkyawadaskar.github.io/og-preview-data-analyst-agent.png">
   <meta property="og:url" content="https://ajinkyawadaskar.github.io/projects/data-analyst-agent.html">
   <meta property="og:type" content="article">
@@ -34,9 +34,9 @@
   </div>
 
   <span class="badge badge-live">LIVE</span>
-  <h1 class="case-title">Guardrailed Natural Language to SQL Agent</h1>
+  <h1 class="case-title">Governed Text-to-SQL Agent with a Semantic Execution Gateway</h1>
   <p class="case-subtitle">
-    Natural language to SQL over BigQuery — with a guardrail layer that parses every generated query and decides whether it's allowed to run at all.
+    Ask a question in plain English, get an answer backed by real data. The LLM never writes SQL — a deterministic compiler does. If the question doesn't map to a certified metric, it fails to compile instead of guessing.
   </p>
 
   <div class="cta-bar">
@@ -52,71 +52,87 @@
   <hr class="divider">
 
   <p>
-    Getting an LLM to write SQL is easy. Every model does it competently now.
+    Most text-to-SQL tools let the LLM write the query directly. That works until it doesn't — and the failure mode is uniquely dangerous. The model doesn't crash or throw an error. It returns a number that looks right, reads right, and is completely wrong. A made-up column, a missing join, a filter that silently drops half the data. You get a confident answer with no way to know it's broken.
   </p>
   <p>
-    The part nobody demos is what happens when it writes something wrong — and "wrong" has a wide range. It can invent a column that doesn't exist. It can reach for a table you never meant to expose. It can write a perfectly valid query that scans six gigabytes because it forgot a date filter. Or it can write <strong>DROP TABLE</strong> at the end of something that looked fine.
-  </p>
-  <p>
-    You can ask a model nicely not to do those things. That lowers the rate. It doesn't bound it. This project is the other half: parse every generated query before it runs, check it against rules that don't depend on the model cooperating, and refuse the ones that fail.
+    The first version of this project added guardrails — AST parsing, table allowlists, cost ceilings — to catch bad SQL after the model writes it. That works, but it's still reactive. The semantic execution gateway takes a different approach: <strong>don't let the LLM write SQL at all</strong>. It picks a metric from a certified list, and deterministic code compiles the query. A hallucinated metric becomes a name that doesn't resolve, not a query that runs and returns something plausible.
   </p>
 </div>
 
-<!-- ARCHITECTURE -->
+<!-- HOW IT WORKS -->
 <div class="case-section">
-  <div class="section-label">// architecture</div>
+  <div class="section-label">// how it works</div>
   <hr class="divider">
 
-  <p>The system has two paths. A <strong>structured path</strong> compiles SQL from a certified glossary — the LLM never writes a query. An <strong>unstructured path</strong> retrieves support notes from a vector store. A router decides which path (or both) a question needs, and a synthesis layer merges the results.</p>
+  <p>You ask a question in plain English. The system figures out what kind of answer you need and builds it from verified components — no free-form SQL generation anywhere in the pipeline.</p>
 
   <div style="margin: 2rem 0; overflow-x: auto; background: #f8f9fa; border-radius: 8px; border: 1px solid var(--border); padding: 1rem;">
-    <img src="/projects/semantic-gateway-architecture.png" alt="Semantic Gateway architecture — structured path compiles SQL from a certified glossary, unstructured path retrieves from LanceDB, both merge in a synthesis layer with an audit envelope" style="width: 100%; max-width: 960px; display: block; margin: 0 auto;">
+    <img src="/projects/semantic-gateway-architecture.png" alt="Governed Text-to-SQL architecture — structured path compiles SQL from a certified glossary, unstructured path retrieves from LanceDB, both merge in a synthesis layer with an audit envelope" style="width: 100%; max-width: 960px; display: block; margin: 0 auto;">
   </div>
 
-  <h3 style="color: var(--accent); margin-top: 2rem; font-family: 'JetBrains Mono', monospace; font-size: 14px;">Each layer, what it does, and how it scales</h3>
-
-  <div class="decision-block" style="margin-top: 1.5rem;">
-    <p><strong>Router.</strong> Regex classifier that looks at question shape — does it ask for a number, a note, or both? Free, instant, and every decision traces to the exact pattern that fired. <em>Production:</em> swap for a lightweight LLM classifier when questions get ambiguous enough that keywords miss.</p>
-  </div>
-
-  <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>Intent Extraction.</strong> The LLM reads the question and emits a small JSON naming a certified measure, dimensions, and filters — validated against <code>semantic_model.yaml</code>. If the metric doesn't exist in the glossary, it's refused. The LLM never writes SQL. <em>Production:</em> expand the glossary as new metrics get certified; the compiler handles the rest.</p>
-  </div>
-
-  <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>Semantic Cache.</strong> SHA-256 of the resolved intent + caller identity. Two differently worded but identical questions hit the same entry. Two callers never share a filtered result. 74–89% latency reduction on hits. <em>Production:</em> move from SQLite to Redis; add TTL-based invalidation tied to data freshness.</p>
+  <div class="decision-block" style="margin-top: 2rem;">
+    <h3>The structured path — when you ask for a number</h3>
+    <p>
+      "What's the total revenue for ACME last quarter?" The LLM reads your question and outputs a small JSON — just the metric name, dimensions, and filters. That JSON is validated against a <code>semantic_model.yaml</code> glossary where every measure, dimension, and join is pre-certified. If the metric exists, a compiler (sqlglot, no string concatenation) builds the SQL. If it doesn't, the request is refused — not answered with a guess.
+    </p>
+    <p>
+      Before the query runs, a security layer walks the compiled AST and injects row-level filters based on the caller's identity. The LLM never sees these filters, can't modify them, and can't skip them. Then the query hits BigQuery with the same cost ceiling and row cap from the original guardrail layer.
+    </p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>Semantic Compiler.</strong> sqlglot expression builders turn the validated intent into SQL — graph traversal for joins, AST construction for predicates. No string concatenation anywhere. <em>Production:</em> add more join paths and aggregate functions to the semantic model as the warehouse grows.</p>
+    <h3>The unstructured path — when you ask about context</h3>
+    <p>
+      "What were customers complaining about last month?" There's no metric to compile here. The system retrieves relevant support notes from a LanceDB vector store and surfaces them with attribution — which notes matched and why.
+    </p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>Security Injection.</strong> After the LLM is done contributing anything, code walks the compiled AST and ANDs row-level predicates onto tables that carry a policy. An invalid identity raises an error outright — never a query that quietly returns zero rows. <em>Production:</em> wire to a real IAM provider instead of simulated tenant identities.</p>
+    <h3>Stacked queries — when you need both</h3>
+    <p>
+      "Find customers who complained about billing, then show their revenue." The retrieval path finds <em>who</em> from the notes, then the compiler builds a precise SQL query scoped to exactly those customer IDs. The LLM decides what to compute; the code decides how to scope it. This split took three prompt iterations to get right — the key was explicitly forbidding the model from trying to identify accounts on its own.
+    </p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>BigQuery Execution.</strong> The compiled, security-injected query runs against live BigQuery with the same guardrails as the original agent (cost ceiling, row cap). <em>Production:</em> add query queuing and priority lanes for expensive scans.</p>
+    <h3>The router</h3>
+    <p>
+      A regex classifier looks at question shape and decides which path — structured, unstructured, or both. It's free, instant, and every decision traces to the exact pattern that fired. Its blind spot is exactly what you'd expect: a stacking case that says "had trouble" instead of "complained" routes structured-only and drops the qualitative half. Logged, not hidden.
+    </p>
+  </div>
+</div>
+
+<!-- WHAT MAKES IT TRUSTWORTHY -->
+<div class="case-section">
+  <div class="section-label">// what makes it trustworthy</div>
+  <hr class="divider">
+
+  <div class="decision-block">
+    <h3>Semantic caching that respects identity</h3>
+    <p>
+      The cache key is a SHA-256 hash of the resolved intent plus the caller's identity — not the raw question text. "What did Acme spend last month?" and "Show me Acme's spending for last month" hit the same cache entry. But two different callers never share a filtered result. 74–89% latency reduction on cache hits.
+    </p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>Vector Search (RAG path).</strong> For unstructured questions, retrieves relevant support notes from a LanceDB vector store. For stacked questions ("find customers who complained about billing, then show their revenue"), retrieval resolves <em>who</em>, then the compiler builds a precise query scoped to exactly those IDs. <em>Production:</em> replace synthetic notes with a real support-ticket corpus; add reranking.</p>
+    <h3>Audit envelope on every response</h3>
+    <p>
+      Every answer ships with a trust receipt: the compiled SQL, the proven join path, whether the cache was hit, which notes were retrieved, which route was taken, and how long it took. A downstream consumer never has to take "trust me" as the only option.
+    </p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>Synthesis Layer.</strong> Merges outputs from the structured and unstructured paths into one attributed response. The LLM words the answer; the data behind it is deterministic. <em>Production:</em> add citation links back to source notes and query results.</p>
+    <h3>MCP integration</h3>
+    <p>
+      The gateway is exposed as a Model Context Protocol tool via FastMCP. Any MCP-aware client — Claude Code, Cursor, or a custom agent — can call it through the same compile → security → execute pipeline. It's not locked to this project's UI.
+    </p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>Audit Envelope.</strong> Every response ships with a trust receipt — compiled SQL, proven join path, cache hit/miss, retrieved note IDs, route taken, and latency. A caller never has to take "trust me" as the only option. <em>Production:</em> pipe into a compliance dashboard for audit trails.</p>
-  </div>
-
-  <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>MCP Server.</strong> The gateway is exposed as a Model Context Protocol tool via FastMCP. Any MCP-aware client — not just this agent's UI — can call it through the same compile → security → guard → execute pipeline. <em>Production:</em> register as a standard tool in the organization's MCP registry.</p>
-  </div>
-
-  <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>Observability.</strong> OpenTelemetry spans on every layer, exported to Langfuse. <code>init_tracing()</code> with no keys is a documented no-op — spans are created, just not exported. <em>Production:</em> swap Langfuse for Datadog or your existing APM; it's a config change, not a code change.</p>
+    <h3>End-to-end observability</h3>
+    <p>
+      OpenTelemetry spans on every layer, exported to Langfuse. If tracing keys aren't configured, spans are still created — just not exported. Swapping to Datadog or your existing APM is a config change, not a code change.
+    </p>
   </div>
 </div>
 
@@ -126,15 +142,12 @@
   <hr class="divider">
 
   <div class="decision-block">
-    <h3>Why AST parsing instead of regex or a prompt instruction</h3>
+    <h3>Why the LLM should never write the query</h3>
     <p>
-      A prompt instruction ("never write DELETE") reduces the rate of bad SQL. It doesn't bound it — the model can still produce whatever it wants.
+      The first version of this project had the LLM write SQL directly, then ran five checks before anything touched BigQuery. That catches dangerous queries. It doesn't catch plausible-but-wrong ones — a valid SELECT that joins on the wrong key, or aggregates at the wrong grain. Those pass every guardrail and return a number that looks fine.
     </p>
     <p>
-      A regex can be fooled by comments, string literals, or CTEs. <code>DELETE</code> inside a comment is harmless; <code>DELETE</code> inside a CTE is not. A regex can't tell the difference.
-    </p>
-    <p>
-      An AST parse with <strong>sqlglot</strong> sees the actual statement type regardless of how it's formatted — <code>DELETE</code> buried inside a CTE gets caught because the parser sees a <code>Delete</code> node, not because a pattern matched a string. The check is on the structure, not the text, which is what makes it a bound rather than a rate reduction.
+      The semantic gateway removes this entire class of errors. The LLM's job is reduced to intent extraction — naming a metric and its filters. The compiler owns the SQL. A hallucinated metric becomes a compile error, not a wrong answer. The trade-off is coverage: questions outside the certified glossary fall back to the original path (or are refused). That's a deliberate constraint, not a bug.
     </p>
   </div>
 </div>
@@ -144,102 +157,12 @@
   <div class="section-label">// numbers</div>
   <hr class="divider">
 
-  <p><strong>Schema compression</strong> — the first win was noticing the schema was duplicated, not the clever part.</p>
+  <p><strong>Accuracy</strong> — same 25-question eval set, same model (Gemini 3.1 Flash Lite), before and after the gateway.</p>
 
   <div class="numbers-table-wrap">
     <table class="numbers-table">
       <thead>
-        <tr><th></th><th>Tables</th><th>Columns</th><th>Tokens</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>thelook_ecommerce</td><td class="num">7</td><td class="num">75</td><td class="num">488</td></tr>
-        <tr><td>GA, naive (366 shards)</td><td class="num">366</td><td class="num">123,708</td><td class="num">1,235,616</td></tr>
-        <tr><td>GA, collapsed to wildcard</td><td class="num">1</td><td class="num">338</td><td class="num">3,376</td></tr>
-        <tr><td><strong>Full corpus as sent to the model</strong></td><td class="num">10</td><td class="num">417</td><td class="num">3,921</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <p>Google Analytics stores each day as its own table — 366 of them, every one with the same 338 columns. Describing all of that comes to <strong>1,235,616 tokens</strong>. BigQuery already treats those tables as one thing via a wildcard, so describing one shard drops the whole corpus to <strong>3,921 tokens</strong>. 315x smaller, nothing lost.</p>
-
-  <p style="margin-top: 2rem;"><strong>Cost ceiling</strong> — dry-run measurements, not estimates.</p>
-
-  <div class="numbers-table-wrap">
-    <table class="numbers-table">
-      <thead>
-        <tr><th>Query</th><th>Bytes</th><th>Result</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><code>SELECT *</code> all GA shards, no date filter</td><td class="num">5.767 GB</td><td class="block">blocked</td></tr>
-        <tr><td><code>SELECT *</code> GA, one month</td><td class="num">0.794 GB</td><td class="pass">passes</td></tr>
-        <tr><td><code>SELECT COUNT(*)</code> all GA shards</td><td class="num">0.000 GB</td><td class="pass">passes</td></tr>
-        <tr><td><code>SELECT *</code> thelook.events (2.4M rows)</td><td class="num">0.384 GB</td><td class="pass">passes</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <p><code>COUNT(*)</code> across every shard is free — BigQuery answers it from metadata. A guard that counted tables instead of bytes would block a query that costs nothing. Bytes is the right signal.</p>
-
-  <p style="margin-top: 2rem;"><strong>Accuracy</strong></p>
-
-  <div class="numbers-table-wrap">
-    <table class="numbers-table">
-      <thead>
-        <tr><th>Metric</th><th>Result</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>Execution accuracy across 25 questions</td><td class="num">5/25 (20%)</td></tr>
-        <tr><td>Adversarial prompts blocked</td><td class="num">5/5 (100%)</td></tr>
-        <tr><td>Average retries per question</td><td class="num">0.96</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <p>
-    Scored by comparing result sets, not SQL strings — two different queries can both be correct, and a string comparison would fail the valid one.
-  </p>
-  <p>
-    The 20% accuracy reflects <strong>Gemini 3.1 Flash Lite on the free tier</strong> — a lightweight model that struggles with complex joins and GA's nested schema. The number that matters for this project is the second one: every adversarial prompt was caught, and nothing dangerous reached BigQuery.
-  </p>
-</div>
-
-<!-- WHAT DIDN'T WORK -->
-<div class="case-section">
-  <div class="section-label">// what didn't work</div>
-  <hr class="divider">
-
-  <div class="failure-block">
-    <h3>A guardrail that failed open</h3>
-    <p>
-      Column validation looked up each table's columns from the schema context. If the lookup came back empty, the code treated that as "I don't know this table" and skipped the check.
-    </p>
-    <p>
-      The lookup was broken — wrong data structure, so it came back empty every time. Column validation silently never ran, and a query selecting a column that doesn't exist passed all four checks and reported clean.
-    </p>
-    <p>
-      The bug was a one-liner. The lesson wasn't. <strong>A guardrail that skips when it's confused is worse than one that doesn't exist</strong>, because it reports success. Any check that can't complete has to fail closed.
-    </p>
-  </div>
-</div>
-
-<!-- SEMANTIC EXECUTION GATEWAY -->
-<div class="case-section">
-  <div class="section-label">// what shipped next: semantic execution gateway</div>
-  <hr class="divider">
-
-  <p>
-    The guardrail layer above catches bad SQL after the LLM writes it. The semantic execution gateway flips the model: the LLM never writes SQL at all. It picks a metric off a small certified list, and a deterministic compiler turns that into a query. An off-model question doesn't produce a plausible wrong answer — it fails to compile.
-  </p>
-  <p>
-    This is on the <code>feature/semantic-gateway</code> branch, tested against live BigQuery and a live Gemini model. Not merged to main yet.
-  </p>
-
-  <p style="margin-top: 2rem;"><strong>Numbers</strong> — same 25-question eval set, same model, before vs after.</p>
-
-  <div class="numbers-table-wrap">
-    <table class="numbers-table">
-      <thead>
-        <tr><th>Metric</th><th>Before</th><th>After</th></tr>
+        <tr><th>Metric</th><th>Before (guardrails only)</th><th>After (semantic gateway)</th></tr>
       </thead>
       <tbody>
         <tr><td>Answer accuracy (25 questions)</td><td class="num">8/25 (32%)</td><td class="num">12/25 (48%)</td></tr>
@@ -248,11 +171,103 @@
     </table>
   </div>
 
-  <p>
-    A second eval set — 18 questions built specifically to test access control, caching, and the RAG-stacking pattern — scored <strong>17/18</strong>.
-  </p>
+  <p>+16 points is a real, measured lift. The baseline was re-measured first so the delta isn't accidentally crediting the gateway for a guardrail bugfix that predates it.</p>
 
-  <p style="margin-top: 2rem;"><strong>What went into the stack:</strong> LangGraph, LangChain, LanceDB, Model Context Protocol (MCP), OpenTelemetry, Langfuse, Pydantic, SQLite.</p>
+  <p style="margin-top: 2rem;"><strong>Targeted eval</strong> — 18 questions built specifically to test the four capabilities the original 25 were never designed to exercise.</p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th>Capability</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Structured (new certified measures/dimensions)</td><td class="num">9/9</td></tr>
+        <tr><td>Permission denied (invalid identity raises, valid cross-filter compiles empty)</td><td class="num">4/4</td></tr>
+        <tr><td>Cache hit (paraphrase hits the same entry)</td><td class="num">2/2</td></tr>
+        <tr><td>Stacked (router + retrieval + compile + synthesis)</td><td class="num">2/3</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><strong>17/18.</strong> The one failure is a genuine edge case: the LLM emitted a malformed filter despite the prompt explicitly forbidding it. A real model-behavior problem, not a script bug — kept, not smoothed over.</p>
+
+  <p style="margin-top: 2rem;"><strong>Cache performance</strong></p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th></th><th>API path</th><th>MCP tool</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Cold (cache miss)</td><td class="num">3,856 ms</td><td class="num">5,468 ms</td></tr>
+        <tr><td>Paraphrase (cache hit)</td><td class="num">1,003 ms</td><td class="num">599 ms</td></tr>
+        <tr><td>Latency reduction</td><td class="num">74%</td><td class="num">89%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top: 2rem;"><strong>Schema compression</strong> — 315x smaller context, nothing lost.</p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th></th><th>Tables</th><th>Columns</th><th>Tokens</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>GA, naive (366 shards)</td><td class="num">366</td><td class="num">123,708</td><td class="num">1,235,616</td></tr>
+        <tr><td>GA, collapsed to wildcard</td><td class="num">1</td><td class="num">338</td><td class="num">3,376</td></tr>
+        <tr><td><strong>Full corpus sent to model</strong></td><td class="num">10</td><td class="num">417</td><td class="num">3,921</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- WHAT DIDN'T WORK -->
+<div class="case-section">
+  <div class="section-label">// what didn't work</div>
+  <hr class="divider">
+
+  <div class="failure-block">
+    <h3>A security-correct denial that crashed instead of returning empty</h3>
+    <p>
+      Three computed metrics used raw division — <code>COUNTIF(...) / COUNT(*)</code>. When the security layer legitimately zeroed out matching rows (exactly what a denied query should look like), BigQuery raised a division-by-zero error instead of returning NULL. The query was correctly scoped to zero rows, but the formula didn't handle it.
+    </p>
+    <p>
+      Found by the golden eval set's own test case. Fixed with <code>SAFE_DIVIDE</code>. The lesson: a security layer that works correctly can still break downstream if the query assumes it will always have data.
+    </p>
+  </div>
+
+  <div class="failure-block" style="margin-top: 1.5rem;">
+    <h3>Two refusal paths that skipped the audit trail</h3>
+    <p>
+      When the compiler refused a question or the security layer denied access, the response went straight to the user — bypassing the node that stamps the audit envelope. A denied request had no recorded reason for stopping, while every other terminal state did.
+    </p>
+    <p>
+      Fixed by routing both through the same halt node as everything else. <strong>If you have an audit trail, every exit path has to go through it</strong> — especially the error paths, because those are the ones someone will ask about later.
+    </p>
+  </div>
+
+  <div class="failure-block" style="margin-top: 1.5rem;">
+    <h3>A guardrail that failed open (from the original agent)</h3>
+    <p>
+      Column validation looked up each table's columns from the schema context. A broken data structure made the lookup return empty every time. The code treated empty as "I don't know this table" and skipped the check. Every query passed, and the guardrail reported success.
+    </p>
+    <p>
+      <strong>A guardrail that skips when it's confused is worse than one that doesn't exist</strong>, because it reports success. Any check that can't complete has to fail closed.
+    </p>
+  </div>
+</div>
+
+<!-- STACK -->
+<div class="case-section">
+  <div class="section-label">// stack</div>
+  <hr class="divider">
+
+  <p><strong>Built with:</strong> Python, FastAPI, LangGraph, LangChain, Google Gemini, BigQuery, sqlglot, LanceDB, Model Context Protocol (MCP), FastMCP, OpenTelemetry, Langfuse, Pydantic, pytest, Streamlit.</p>
+
+  <p style="margin-top: 1rem;">
+    Tested against live BigQuery and a live Gemini model. On the <code>feature/semantic-gateway</code> branch — not merged to main yet.
+  </p>
 
   <p style="margin-top: 1.5rem;">
     <a href="https://github.com/ajinkyawadaskar/data-analyst-agent/blob/feature/semantic-gateway/docs/semantic-gateway.md" target="_blank" rel="noopener" class="read-more" style="font-size: 15px;">Full technical write-up →</a>
@@ -264,7 +279,7 @@
   <a href="https://streamlit-ui-production-bdba.up.railway.app" target="_blank" rel="noopener" class="btn btn-primary">Try the Demo</a>
   <a href="https://github.com/ajinkyawadaskar/data-analyst-agent" target="_blank" rel="noopener" class="btn btn-secondary">GitHub</a>
   <a href="https://data-analyst-agent-production-316b.up.railway.app/health" target="_blank" rel="noopener" class="btn btn-secondary">Live API</a>
-  <a href="https://github.com/ajinkyawadaskar/data-analyst-agent/blob/main/docs/architecture.md" target="_blank" rel="noopener" class="btn btn-secondary">Architecture Doc</a>
+  <a href="https://github.com/ajinkyawadaskar/data-analyst-agent/blob/feature/semantic-gateway/docs/semantic-gateway.md" target="_blank" rel="noopener" class="btn btn-secondary">Technical Write-up</a>
 </div>
 
 <footer>
