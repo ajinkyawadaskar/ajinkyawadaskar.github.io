@@ -134,7 +134,7 @@
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <p><strong>Semantic Compiler.</strong> sqlglot expression builders turn the validated intent into SQL — graph traversal for joins, AST construction for predicates. No string concatenation anywhere. <em>Production:</em> add more join paths and aggregate functions to the semantic model as the warehouse grows.</p>
+    <p><strong>Semantic Compiler.</strong> sqlglot expression builders turn the validated intent into SQL — graph traversal for joins, AST construction for predicates. No string concatenation anywhere. The compiler resolves join paths from an entity graph: when two valid routes exist, it picks the shortest path and fails at compile time if the path is ambiguous rather than guessing. Fan-out (one-to-many joins that inflate aggregates) is handled by the semantic model's grain declarations — the compiler knows which entity a measure is defined at and won't cross a grain boundary without an explicit aggregation. <em>Production:</em> add more join paths and aggregate functions to the semantic model as the warehouse grows; add schema-drift detection that validates the model against BigQuery's live metadata in CI.</p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
@@ -201,7 +201,7 @@
     </table>
   </div>
 
-  <p>+16 points is a real, measured lift. The baseline was re-measured first so the delta isn't accidentally crediting the gateway for a guardrail bugfix that predates it.</p>
+  <p>+16 points is a real, measured lift. The baseline was re-measured first so the delta isn't accidentally crediting the gateway for a guardrail bugfix that predates it. The ceiling here is coverage, not compiler accuracy: most of the 25 questions target metrics outside the current glossary and fall back to the legacy path. The targeted eval below — 17/18 on questions the glossary <em>can</em> express — is the better measure of compiler correctness.</p>
 
   <p style="margin-top: 2rem;"><strong>Targeted eval</strong> — 18 questions built specifically to test the four capabilities the original 25 were never designed to exercise.</p>
 
@@ -296,7 +296,7 @@
   <p><strong>Built with:</strong> Python, FastAPI, LangGraph, LangChain, Google Gemini, BigQuery, sqlglot, LanceDB, Model Context Protocol (MCP), FastMCP, OpenTelemetry, Langfuse, Pydantic, pytest, Streamlit.</p>
 
   <p style="margin-top: 1rem;">
-    Tested against live BigQuery and a live Gemini model. On the <code>feature/semantic-gateway</code> branch — not merged to main yet.
+    Tested against live BigQuery and a live Gemini model. The semantic gateway lives on the <code>feature/semantic-gateway</code> branch — kept separate so <code>main</code> stays a clean before/after comparison of the guardrail-only agent vs. the compiled path.
   </p>
 
   <p style="margin-top: 1.5rem;">
