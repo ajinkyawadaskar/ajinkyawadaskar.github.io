@@ -67,41 +67,56 @@
   <div class="section-label">// architecture</div>
   <hr class="divider">
 
-  <p>The agent turns a question into SQL, then five checks run before anything touches BigQuery. If a check fails, the violation goes back to the model for a retry — twice, then it stops and tells you why.</p>
+  <p>The system has two paths. A <strong>structured path</strong> compiles SQL from a certified glossary — the LLM never writes a query. An <strong>unstructured path</strong> retrieves support notes from a vector store. A router decides which path (or both) a question needs, and a synthesis layer merges the results.</p>
 
-  <div class="mermaid-container">
-    <pre class="mermaid">
-flowchart TD
-    Q["Question\n(plain English)"] --> GEN
+  <div style="margin: 2rem 0; overflow-x: auto; background: #f8f9fa; border-radius: 8px; border: 1px solid var(--border); padding: 1rem;">
+    <img src="/projects/semantic-gateway-architecture.png" alt="Semantic Gateway architecture — structured path compiles SQL from a certified glossary, unstructured path retrieves from LanceDB, both merge in a synthesis layer with an audit envelope" style="width: 100%; max-width: 960px; display: block; margin: 0 auto;">
+  </div>
 
-    subgraph startup["at startup, once"]
-        INTRO["introspect BigQuery\n10 tables · 417 columns"] --> COMPACT["compact\nschema context"]
-    end
+  <h3 style="color: var(--accent); margin-top: 2rem; font-family: 'JetBrains Mono', monospace; font-size: 14px;">Each layer, what it does, and how it scales</h3>
 
-    COMPACT -.->|schema in prompt| GEN
-    GEN["generate SQL\nGemini 3.1 Flash Lite"] --> G1
+  <div class="decision-block" style="margin-top: 1.5rem;">
+    <p><strong>Router.</strong> Regex classifier that looks at question shape — does it ask for a number, a note, or both? Free, instant, and every decision traces to the exact pattern that fired. <em>Production:</em> swap for a lightweight LLM classifier when questions get ambiguous enough that keywords miss.</p>
+  </div>
 
-    subgraph guard["guardrail layer — the point of the project"]
-        G1["AST parse\nsingle statement, SELECT only"] --> G2
-        G2["table allowlist"] --> G3
-        G3["column validation\nagainst schema context"] --> G4
-        G4["row limit"] --> C1
-        C1["dry run\nbytes scanned vs ceiling"]
-    end
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Intent Extraction.</strong> The LLM reads the question and emits a small JSON naming a certified measure, dimensions, and filters — validated against <code>semantic_model.yaml</code>. If the metric doesn't exist in the glossary, it's refused. The LLM never writes SQL. <em>Production:</em> expand the glossary as new metrics get certified; the compiler handles the rest.</p>
+  </div>
 
-    G1 -->|violation| RETRY
-    G2 -->|violation| RETRY
-    G3 -->|violation| RETRY
-    C1 -->|over ceiling| RETRY
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Semantic Cache.</strong> SHA-256 of the resolved intent + caller identity. Two differently worded but identical questions hit the same entry. Two callers never share a filtered result. 74–89% latency reduction on hits. <em>Production:</em> move from SQLite to Redis; add TTL-based invalidation tied to data freshness.</p>
+  </div>
 
-    RETRY{"retries left?\nmax 2"}
-    RETRY -->|yes, with violations| GEN
-    RETRY -->|no| BLOCKED["blocked\nreport why"]
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Semantic Compiler.</strong> sqlglot expression builders turn the validated intent into SQL — graph traversal for joins, AST construction for predicates. No string concatenation anywhere. <em>Production:</em> add more join paths and aggregate functions to the semantic model as the warehouse grows.</p>
+  </div>
 
-    C1 -->|under ceiling| EXEC["execute on BigQuery\nrow-capped"]
-    EXEC --> EXPLAIN["explain rows\nin plain English"]
-    EXPLAIN --> OUT["answer + SQL +\nguardrail report"]
-    </pre>
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Security Injection.</strong> After the LLM is done contributing anything, code walks the compiled AST and ANDs row-level predicates onto tables that carry a policy. An invalid identity raises an error outright — never a query that quietly returns zero rows. <em>Production:</em> wire to a real IAM provider instead of simulated tenant identities.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>BigQuery Execution.</strong> The compiled, security-injected query runs against live BigQuery with the same guardrails as the original agent (cost ceiling, row cap). <em>Production:</em> add query queuing and priority lanes for expensive scans.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Vector Search (RAG path).</strong> For unstructured questions, retrieves relevant support notes from a LanceDB vector store. For stacked questions ("find customers who complained about billing, then show their revenue"), retrieval resolves <em>who</em>, then the compiler builds a precise query scoped to exactly those IDs. <em>Production:</em> replace synthetic notes with a real support-ticket corpus; add reranking.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Synthesis Layer.</strong> Merges outputs from the structured and unstructured paths into one attributed response. The LLM words the answer; the data behind it is deterministic. <em>Production:</em> add citation links back to source notes and query results.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Audit Envelope.</strong> Every response ships with a trust receipt — compiled SQL, proven join path, cache hit/miss, retrieved note IDs, route taken, and latency. A caller never has to take "trust me" as the only option. <em>Production:</em> pipe into a compliance dashboard for audit trails.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>MCP Server.</strong> The gateway is exposed as a Model Context Protocol tool via FastMCP. Any MCP-aware client — not just this agent's UI — can call it through the same compile → security → guard → execute pipeline. <em>Production:</em> register as a standard tool in the organization's MCP registry.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Observability.</strong> OpenTelemetry spans on every layer, exported to Langfuse. <code>init_tracing()</code> with no keys is a documented no-op — spans are created, just not exported. <em>Production:</em> swap Langfuse for Datadog or your existing APM; it's a config change, not a code change.</p>
   </div>
 </div>
 
@@ -207,6 +222,43 @@ flowchart TD
   </div>
 </div>
 
+<!-- SEMANTIC EXECUTION GATEWAY -->
+<div class="case-section">
+  <div class="section-label">// what shipped next: semantic execution gateway</div>
+  <hr class="divider">
+
+  <p>
+    The guardrail layer above catches bad SQL after the LLM writes it. The semantic execution gateway flips the model: the LLM never writes SQL at all. It picks a metric off a small certified list, and a deterministic compiler turns that into a query. An off-model question doesn't produce a plausible wrong answer — it fails to compile.
+  </p>
+  <p>
+    This is on the <code>feature/semantic-gateway</code> branch, tested against live BigQuery and a live Gemini model. Not merged to main yet.
+  </p>
+
+  <p style="margin-top: 2rem;"><strong>Numbers</strong> — same 25-question eval set, same model, before vs after.</p>
+
+  <div class="numbers-table-wrap">
+    <table class="numbers-table">
+      <thead>
+        <tr><th>Metric</th><th>Before</th><th>After</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Answer accuracy (25 questions)</td><td class="num">8/25 (32%)</td><td class="num">12/25 (48%)</td></tr>
+        <tr><td>Adversarial prompts blocked</td><td class="num">5/5</td><td class="num">5/5</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>
+    A second eval set — 18 questions built specifically to test access control, caching, and the RAG-stacking pattern — scored <strong>17/18</strong>.
+  </p>
+
+  <p style="margin-top: 2rem;"><strong>What went into the stack:</strong> LangGraph, LangChain, LanceDB, Model Context Protocol (MCP), OpenTelemetry, Langfuse, Pydantic, SQLite.</p>
+
+  <p style="margin-top: 1.5rem;">
+    <a href="https://github.com/ajinkyawadaskar/data-analyst-agent/blob/feature/semantic-gateway/docs/semantic-gateway.md" target="_blank" rel="noopener" class="read-more" style="font-size: 15px;">Full technical write-up →</a>
+  </p>
+</div>
+
 <!-- LINKS -->
 <div class="bottom-links">
   <a href="https://streamlit-ui-production-bdba.up.railway.app" target="_blank" rel="noopener" class="btn btn-primary">Try the Demo</a>
@@ -218,22 +270,6 @@ flowchart TD
 <footer>
   <span>built with intention · ajinkya wadaskar · 2025</span>
 </footer>
-
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({
-    startOnLoad: true,
-    theme: 'dark',
-    themeVariables: {
-      primaryColor: '#21262D',
-      primaryBorderColor: '#30363D',
-      primaryTextColor: '#E6EDF3',
-      lineColor: '#8B949E',
-      secondaryColor: '#161B22',
-      tertiaryColor: '#0D1117'
-    }
-  });
-</script>
 
 </body>
 </html>

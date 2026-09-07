@@ -402,50 +402,51 @@ section { max-width: 860px; margin: 0 auto; padding: 5rem 2rem; }
 
 /* SKILLS */
 .skills-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
 }
 .skill-group {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 1.25rem;
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 0.75rem;
-  align-items: start;
 }
 .skill-label {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--accent);
-  padding-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.75rem;
 }
 .skill-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .skill-chip {
   font-size: 12px;
-  padding: 3px 10px;
+  padding: 4px 10px;
   border-radius: 4px;
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: border-color 0.2s, box-shadow 0.2s, color 0.2s;
 }
-
-/* TIERED SKILLS */
-.tier-core .skill-chip {
+.skill-chip:hover {
   border-color: var(--accent);
   color: var(--text);
-  background: rgba(249,115,22,0.08);
+  box-shadow: 0 0 8px rgba(249,115,22,0.15);
 }
-.tier-familiar .skill-label {
-  color: var(--muted);
+.skill-chip .skill-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
-.tier-familiar .skill-chip {
-  font-size: 11px;
-  padding: 2px 8px;
-}
+.skill-icon-sprite { display: none; }
 
 /* CONTACT */
 #contact {
@@ -744,7 +745,8 @@ footer {
   .nav-links { gap: 1rem; }
   section { padding: 3.5rem 1.25rem; }
   .projects-grid { grid-template-columns: 1fr; }
-  .skill-group { grid-template-columns: 1fr; gap: 0.5rem; }
+  .skills-grid { grid-template-columns: 1fr; }
+  .skill-group { padding: 1rem; }
   .contact-grid { grid-template-columns: 1fr; }
   .hero-name { font-size: 2rem; }
   .case-hero { padding: 5.5rem 1.25rem 2rem; }

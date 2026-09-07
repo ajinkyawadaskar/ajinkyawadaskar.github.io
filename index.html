@@ -122,7 +122,7 @@
       </div>
       <div class="project-name">Guardrailed Natural Language to SQL Agent</div>
       <div class="project-desc">
-        NL-to-SQL agent over BigQuery with an AST-level guardrail layer that parses every generated query before it runs. The SQL generation is the boring part — the layer that says no is the point. 5/5 adversarial prompts blocked, 315x schema compression.
+        NL-to-SQL agent over BigQuery with an AST-level guardrail layer that parses every generated query before it runs. Extended with a semantic execution gateway — the LLM picks a metric off a certified list, a deterministic compiler writes the SQL, and an off-model question fails to compile instead of running. Accuracy 32% → 48% on the same eval set, 5/5 adversarial prompts blocked both ways.
       </div>
       <div class="tech-chips">
         <span class="chip">Python</span>
@@ -131,6 +131,8 @@
         <span class="chip">BigQuery</span>
         <span class="chip">sqlglot</span>
         <span class="chip">FastAPI</span>
+        <span class="chip">MCP</span>
+        <span class="chip">RAG</span>
       </div>
       <div class="project-links">
         <a href="/projects/data-analyst-agent.html" class="link-btn primary">View Case Study</a>
@@ -310,6 +312,60 @@
   </div>
 </section>
 
+<!-- SVG SPRITE SHEET -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <!-- Python -->
+  <symbol id="icon-python" viewBox="0 0 24 24"><path fill="#3776AB" d="M11.9 0C5.8 0 6.2 2.6 6.2 2.6l.007 2.7h5.8v.8H3.8S0 5.6 0 11.9s3.3 6.1 3.3 6.1h2V15.2s-.1-3.3 3.2-3.3h5.5s3.1.05 3.1-3V3.6S17.6 0 11.9 0zM8.6 2.1a1 1 0 110 2 1 1 0 010-2z"/><path fill="#FFD43B" d="M12.1 24c6.1 0 5.7-2.6 5.7-2.6l-.007-2.7h-5.8v-.8h8.2S24 18.4 24 12.1s-3.3-6.1-3.3-6.1h-2v2.8s.1 3.3-3.2 3.3H10s-3.1-.05-3.1 3v5.3S6.4 24 12.1 24zm3.3-2.1a1 1 0 110-2 1 1 0 010 2z"/></symbol>
+  <!-- Docker -->
+  <symbol id="icon-docker" viewBox="0 0 24 24"><path fill="#2496ED" d="M13.98 11.08h2.12V8.94h-2.12v2.14zm-2.74 0h2.12V8.94H11.24v2.14zm-2.74 0h2.12V8.94H8.5v2.14zm-2.74 0h2.12V8.94H5.76v2.14zm5.48-2.68h2.12V6.26h-2.12V8.4zm-2.74 0h2.12V6.26H8.5V8.4zm-2.74 0h2.12V6.26H5.76V8.4zm5.48-2.68h2.12V3.58h-2.12v2.14zm-2.74 0h2.12V3.58H8.5v2.14zM24 11.74s-1.57-.72-3.27-.38c-.33-2.11-2.25-3.14-2.25-3.14s-2.1 2.72-.84 5.12c-.69.31-1.88.74-3.52.74H.34c-.33 1.95.04 4.57 1.52 6.46C3.55 22.65 6.11 24 9.84 24c7.6 0 13.22-3.5 15.84-9.97.93.05 2.94.07 3.97-1.96 0 0-2.57-1.2-5.65-.33z"/></symbol>
+  <!-- Git -->
+  <symbol id="icon-git" viewBox="0 0 24 24"><path fill="#F05032" d="M23.55 10.4L13.6.45a1.53 1.53 0 00-2.17 0L9.36 2.53l2.74 2.74a1.82 1.82 0 012.3 2.32l2.64 2.64a1.82 1.82 0 11-1.09 1.03l-2.46-2.46v6.47a1.82 1.82 0 11-1.5-.08V8.55a1.82 1.82 0 01-.99-2.39L8.28 3.44.45 11.27a1.53 1.53 0 000 2.17l9.95 9.95a1.53 1.53 0 002.17 0l9.95-9.95a1.53 1.53 0 00.03-2.04z"/></symbol>
+  <!-- GCP / Google Cloud -->
+  <symbol id="icon-gcp" viewBox="0 0 24 24"><path fill="#4285F4" d="M15.55 8.87l1.76-1.76.12-.74A8.8 8.8 0 005.07 5.1a1 1 0 01.66-.06l3.52-.58s.18-.3.27-.28a5.28 5.28 0 016.03 4.69z"/><path fill="#EA4335" d="M19.63 9.07a8.84 8.84 0 00-2.67-4.31l-2.47 2.47a5.27 5.27 0 011.94 4.18v.53a2.64 2.64 0 010 5.28h-5.28l-.53.53v3.17l.53.53h5.28a6.16 6.16 0 003.2-11.38z"/><path fill="#34A853" d="M6.87 21.45h5.28v-3.52H6.87a2.63 2.63 0 01-1.1-.24l-.74.23-1.77 1.77-.19.72a6.12 6.12 0 003.8 1.04z"/><path fill="#FBBC05" d="M6.87 9.13A6.16 6.16 0 003.07 20.4l2.7-2.7a2.64 2.64 0 013.46-3.99l2.7-2.7a6.14 6.14 0 00-5.06-1.88z"/></symbol>
+  <!-- Azure -->
+  <symbol id="icon-azure" viewBox="0 0 24 24"><path fill="#0078D4" d="M13.05 4.24L7.26 18.07l-4.87.83L13.05 4.24zm.95-.73l3.44 8.99-5.31 6.27 9.48 1.73H4.43L14 3.51z"/></symbol>
+  <!-- FastAPI -->
+  <symbol id="icon-fastapi" viewBox="0 0 24 24"><path fill="#009688" d="M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm-.53 4.36h3.23l-4.2 7.48h2.83l-5.86 7.8 2.28-5.46H7.17l4.3-9.82z"/></symbol>
+  <!-- Airflow -->
+  <symbol id="icon-airflow" viewBox="0 0 24 24"><path fill="#017CEE" d="M12 3.28L2.26 8.64 12 14l9.74-5.36L12 3.28zM2.26 15.36L12 20.72l9.74-5.36L12 10l-9.74 5.36z"/></symbol>
+  <!-- Streamlit -->
+  <symbol id="icon-streamlit" viewBox="0 0 24 24"><path fill="#FF4B4B" d="M12 2L1 7.5 12 13l11-5.5L12 2zm0 13L1 9.5v5L12 20l11-5.5v-5L12 15z"/></symbol>
+  <!-- Tableau -->
+  <symbol id="icon-tableau" viewBox="0 0 24 24"><path fill="#E97627" d="M12.6 1v3.8h3.2V6H12.6v3.8h-1.2V6H8.2V4.8h3.2V1h1.2zM6 7.4v3h2.6v1H6v3H4.8v-3H2.2v-1h2.6v-3H6zm12 0v3h2.6v1H18v3h-1.2v-3h-2.6v-1h2.6v-3H18zm-6 5.2v3.8h3.2v1.2H12.6v3.8h-1.2v-3.8H8.2v-1.2h3.2v-3.8h1.2z"/></symbol>
+  <!-- Power BI -->
+  <symbol id="icon-powerbi" viewBox="0 0 24 24"><path fill="#F2C811" d="M14 4a2 2 0 012 2v12a2 2 0 01-2 2h-1a2 2 0 01-2-2V6a2 2 0 012-2h1zm-5 4a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2v-8a2 2 0 012-2h1zm10-4a2 2 0 012 2v12a2 2 0 01-2 2h-1a2 2 0 01-2-2V6a2 2 0 012-2h1z"/></symbol>
+  <!-- OpenTelemetry -->
+  <symbol id="icon-otel" viewBox="0 0 24 24"><path fill="#425CC7" d="M12 2a10 10 0 100 20 10 10 0 000-20zm3.5 14.5l-7-7 1.4-1.4 7 7-1.4 1.4z"/><circle fill="#425CC7" cx="8" cy="8" r="2"/><circle fill="#425CC7" cx="16" cy="16" r="2"/></symbol>
+  <!-- LangChain -->
+  <symbol id="icon-langchain" viewBox="0 0 24 24"><path fill="#1C3C3C" d="M12 2a3 3 0 00-3 3v1H7a3 3 0 00-3 3v2a3 3 0 003 3h1v1a3 3 0 003 3h2a3 3 0 003-3v-1h1a3 3 0 003-3V9a3 3 0 00-3-3h-2V5a3 3 0 00-3-3z"/><circle fill="#fff" cx="9" cy="9.5" r="1.2"/><circle fill="#fff" cx="15" cy="9.5" r="1.2"/><path fill="none" stroke="#fff" stroke-width="1.5" d="M9.5 13c.8 1 2.2 1.5 3.5 1.2"/></symbol>
+  <!-- Google / Gemini -->
+  <symbol id="icon-google" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09a6.87 6.87 0 010-4.17V7.08H2.18a11.5 11.5 0 000 9.84l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.08l3.66 2.84c.87-2.6 3.3-4.54 6.16-4.54z"/></symbol>
+  <!-- Anthropic / Claude -->
+  <symbol id="icon-claude" viewBox="0 0 24 24"><path fill="#D97757" d="M14.2 3.8L21.5 18h-3.8l-1.5-3H9.8l-1.5 3H4.5L11.8 3.8h2.4zM13 8.5L10.8 13h4.4L13 8.5z"/></symbol>
+  <!-- Pydantic -->
+  <symbol id="icon-pydantic" viewBox="0 0 24 24"><path fill="#E92063" d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.3L18.6 7.5 12 10.7 5.4 7.5 12 4.3z"/></symbol>
+  <!-- pytest -->
+  <symbol id="icon-pytest" viewBox="0 0 24 24"><path fill="#009FE3" d="M6 3h12v2H6V3zm1 4h10v2H7V7zm2 4h6v2H9v-2zm-3 4h12v2H6v-2zm1 4h10v2H7v-2z"/></symbol>
+  <!-- MLflow -->
+  <symbol id="icon-mlflow" viewBox="0 0 24 24"><path fill="#0194E2" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.1 0 2 .9 2 2v3l3 3-1.4 1.4L12 11V7c0-1.1.9-2 2-2h-4z"/></symbol>
+  <!-- SQL -->
+  <symbol id="icon-sql" viewBox="0 0 24 24"><ellipse fill="#CC2927" cx="12" cy="6" rx="8" ry="4"/><path fill="#CC2927" d="M4 6v12c0 2.2 3.6 4 8 4s8-1.8 8-4V6c0 2.2-3.6 4-8 4S4 8.2 4 6z"/></symbol>
+  <!-- BigQuery -->
+  <symbol id="icon-bigquery" viewBox="0 0 24 24"><path fill="#4386FA" d="M6 4l-4 4v8l4 4h8l4-4V8l-4-4H6z"/><path fill="#fff" d="M10 8v5.5l3 1.5v-2l-1.5-.7V8H10z"/><circle fill="#fff" cx="12" cy="14" r="1.5"/></symbol>
+  <!-- XGBoost -->
+  <symbol id="icon-xgboost" viewBox="0 0 24 24"><path fill="#FF6600" d="M4 4l8 4-8 4V4zm16 0l-8 4 8 4V4zM4 16l8-4-8-4v8zm16 0l-8-4 8-4v8z"/></symbol>
+  <!-- scikit-learn -->
+  <symbol id="icon-sklearn" viewBox="0 0 24 24"><path fill="#F89939" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path fill="#fff" d="M8 10h2v6H8v-6zm3-2h2v8h-2V8zm3 4h2v4h-2v-4z"/></symbol>
+  <!-- dbt -->
+  <symbol id="icon-dbt" viewBox="0 0 24 24"><path fill="#FF694B" d="M12.7 1.6l9.7 9.7a2 2 0 010 2.8l-9 9a2 2 0 01-2.8 0l-9-9a2 2 0 010-2.8l9.7-9.7a1 1 0 011.4 0zM12 8v8h1.5l2.5-4-2.5-4H12z"/></symbol>
+  <!-- Amplitude -->
+  <symbol id="icon-amplitude" viewBox="0 0 24 24"><path fill="#1B1F3B" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path fill="#fff" d="M7 15l2.5-6L12 13l2.5-8L17 15"/></symbol>
+  <!-- PySpark -->
+  <symbol id="icon-spark" viewBox="0 0 24 24"><path fill="#E25A1C" d="M12 2l3.5 6.5L22 12l-6.5 3.5L12 22l-3.5-6.5L2 12l6.5-3.5L12 2z"/></symbol>
+  <!-- Hadoop -->
+  <symbol id="icon-hadoop" viewBox="0 0 24 24"><path fill="#FDD835" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path fill="#333" d="M8 9h2v6H8V9zm3 2h2v4h-2v-4zm3-1h2v5h-2v-5z"/></symbol>
+</svg>
+
 <!-- SKILLS -->
 <section id="skills">
   <div class="section-label">// skills</div>
@@ -317,40 +373,95 @@
   <hr class="divider">
 
   <div class="skills-grid">
-    <div class="skill-group tier-core">
-      <div class="skill-label">Core</div>
+
+    <div class="skill-group">
+      <div class="skill-label">LLM / Agent Orchestration</div>
       <div class="skill-chips">
-        <span class="skill-chip">Python</span>
-        <span class="skill-chip">SQL</span>
-        <span class="skill-chip">BigQuery</span>
-        <span class="skill-chip">LangGraph / LangChain</span>
-        <span class="skill-chip">XGBoost / SHAP</span>
-        <span class="skill-chip">A/B Testing & Causal Inference</span>
-        <span class="skill-chip">FastAPI</span>
-        <span class="skill-chip">GCP</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-langchain"/></svg>LangChain</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-langchain"/></svg>LangGraph</span>
+        <span class="skill-chip">GPT-4 / Claude API</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-claude"/></svg>Claude Code</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-google"/></svg>Google Gemini</span>
+        <span class="skill-chip">Agentic Workflows</span>
+        <span class="skill-chip">Tool-Calling</span>
+        <span class="skill-chip">Prompt Engineering</span>
+        <span class="skill-chip">Guardrails</span>
+        <span class="skill-chip">NL-to-SQL</span>
+        <span class="skill-chip">MCP</span>
       </div>
     </div>
-    <div class="skill-group tier-familiar">
-      <div class="skill-label">Familiar with</div>
+
+    <div class="skill-group">
+      <div class="skill-label">Semantic Layer & RAG</div>
       <div class="skill-chips">
-        <span class="skill-chip">Airflow</span>
-        <span class="skill-chip">dbt</span>
-        <span class="skill-chip">Dataform</span>
-        <span class="skill-chip">PySpark</span>
-        <span class="skill-chip">Docker</span>
-        <span class="skill-chip">Amplitude</span>
-        <span class="skill-chip">scikit-learn</span>
-        <span class="skill-chip">Streamlit</span>
-        <span class="skill-chip">Power BI</span>
-        <span class="skill-chip">Tableau</span>
-        <span class="skill-chip">Looker</span>
-        <span class="skill-chip">statsmodels</span>
-        <span class="skill-chip">Azure</span>
-        <span class="skill-chip">Railway</span>
-        <span class="skill-chip">JavaScript</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-bigquery"/></svg>BigQuery</span>
+        <span class="skill-chip">sqlglot</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-pydantic"/></svg>Pydantic</span>
+        <span class="skill-chip">LanceDB</span>
+        <span class="skill-chip">Vector Embeddings</span>
+        <span class="skill-chip">Semantic Caching</span>
+        <span class="skill-chip">MCP</span>
+        <span class="skill-chip">FastMCP</span>
+      </div>
+    </div>
+
+    <div class="skill-group">
+      <div class="skill-label">Machine Learning</div>
+      <div class="skill-chips">
+        <span class="skill-chip">Feature Engineering</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-xgboost"/></svg>XGBoost</span>
+        <span class="skill-chip">LightGBM</span>
+        <span class="skill-chip">K-Means</span>
+        <span class="skill-chip">Time-Series</span>
+        <span class="skill-chip">Churn / LTV Modeling</span>
+        <span class="skill-chip">Credit-Risk Modeling</span>
+        <span class="skill-chip">SHAP</span>
+      </div>
+    </div>
+
+    <div class="skill-group">
+      <div class="skill-label">Observability & Evals</div>
+      <div class="skill-chips">
         <span class="skill-chip">DeepEval</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-otel"/></svg>OpenTelemetry</span>
+        <span class="skill-chip">Langfuse</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-pytest"/></svg>pytest</span>
+        <span class="skill-chip">Custom Eval Harness</span>
+        <span class="skill-chip">Hallucination Analysis</span>
+        <span class="skill-chip">Audit Trails</span>
       </div>
     </div>
+
+    <div class="skill-group">
+      <div class="skill-label">MLOps & Data Engineering</div>
+      <div class="skill-chips">
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-fastapi"/></svg>FastAPI</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-streamlit"/></svg>Streamlit</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-docker"/></svg>Docker</span>
+        <span class="skill-chip">CI/CD</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-mlflow"/></svg>MLflow</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-gcp"/></svg>GCP</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-azure"/></svg>Azure</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-airflow"/></svg>Airflow</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-dbt"/></svg>dbt</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-hadoop"/></svg>Hadoop</span>
+      </div>
+    </div>
+
+    <div class="skill-group">
+      <div class="skill-label">Languages & Tools</div>
+      <div class="skill-chips">
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-python"/></svg>Python</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-sql"/></svg>SQL</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-spark"/></svg>PySpark</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-git"/></svg>Git</span>
+        <span class="skill-chip">REST APIs</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-tableau"/></svg>Tableau</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-amplitude"/></svg>Amplitude</span>
+        <span class="skill-chip"><svg class="skill-icon" width="14" height="14"><use href="#icon-powerbi"/></svg>Power BI</span>
+      </div>
+    </div>
+
   </div>
 </section>
 
