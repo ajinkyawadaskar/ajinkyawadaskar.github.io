@@ -59,80 +59,61 @@
   </p>
 </div>
 
-<!-- HOW IT WORKS -->
+<!-- ARCHITECTURE -->
 <div class="case-section">
-  <div class="section-label">// how it works</div>
+  <div class="section-label">// architecture</div>
   <hr class="divider">
 
-  <p>You ask a question in plain English. The system figures out what kind of answer you need and builds it from verified components — no free-form SQL generation anywhere in the pipeline.</p>
+  <p>The system has two paths. A <strong>structured path</strong> compiles SQL from a certified glossary — the LLM never writes a query. An <strong>unstructured path</strong> retrieves support notes from a vector store. A router decides which path (or both) a question needs, and a synthesis layer merges the results.</p>
 
   <div style="margin: 2rem 0; overflow-x: auto; background: #f8f9fa; border-radius: 8px; border: 1px solid var(--border); padding: 1rem;">
     <img src="/projects/semantic-gateway-architecture.png" alt="Governed Text-to-SQL architecture — structured path compiles SQL from a certified glossary, unstructured path retrieves from LanceDB, both merge in a synthesis layer with an audit envelope" style="width: 100%; max-width: 960px; display: block; margin: 0 auto;">
   </div>
 
-  <div class="decision-block" style="margin-top: 2rem;">
-    <h3>The structured path — when you ask for a number</h3>
-    <p>
-      "What's the total revenue for ACME last quarter?" The LLM reads your question and outputs a small JSON — just the metric name, dimensions, and filters. That JSON is validated against a <code>semantic_model.yaml</code> glossary where every measure, dimension, and join is pre-certified. If the metric exists, a compiler (sqlglot, no string concatenation) builds the SQL. If it doesn't, the request is refused — not answered with a guess.
-    </p>
-    <p>
-      Before the query runs, a security layer walks the compiled AST and injects row-level filters based on the caller's identity. The LLM never sees these filters, can't modify them, and can't skip them. Then the query hits BigQuery with the same cost ceiling and row cap from the original guardrail layer.
-    </p>
+  <h3 style="color: var(--accent); margin-top: 2rem; font-family: 'JetBrains Mono', monospace; font-size: 14px;">Each layer, what it does, and how it scales</h3>
+
+  <div class="decision-block" style="margin-top: 1.5rem;">
+    <p><strong>Router.</strong> Regex classifier that looks at question shape — does it ask for a number, a note, or both? Free, instant, and every decision traces to the exact pattern that fired. <em>Production:</em> swap for a lightweight LLM classifier when questions get ambiguous enough that keywords miss.</p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <h3>The unstructured path — when you ask about context</h3>
-    <p>
-      "What were customers complaining about last month?" There's no metric to compile here. The system retrieves relevant support notes from a LanceDB vector store and surfaces them with attribution — which notes matched and why.
-    </p>
+    <p><strong>Intent Extraction.</strong> The LLM reads the question and emits a small JSON naming a certified measure, dimensions, and filters — validated against <code>semantic_model.yaml</code>. If the metric doesn't exist in the glossary, it's refused. The LLM never writes SQL. <em>Production:</em> expand the glossary as new metrics get certified; the compiler handles the rest.</p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <h3>Stacked queries — when you need both</h3>
-    <p>
-      "Find customers who complained about billing, then show their revenue." The retrieval path finds <em>who</em> from the notes, then the compiler builds a precise SQL query scoped to exactly those customer IDs. The LLM decides what to compute; the code decides how to scope it. This split took three prompt iterations to get right — the key was explicitly forbidding the model from trying to identify accounts on its own.
-    </p>
+    <p><strong>Semantic Cache.</strong> SHA-256 of the resolved intent + caller identity. Two differently worded but identical questions hit the same entry. Two callers never share a filtered result. 74–89% latency reduction on hits. <em>Production:</em> move from SQLite to Redis; add TTL-based invalidation tied to data freshness.</p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <h3>The router</h3>
-    <p>
-      A regex classifier looks at question shape and decides which path — structured, unstructured, or both. It's free, instant, and every decision traces to the exact pattern that fired. Its blind spot is exactly what you'd expect: a stacking case that says "had trouble" instead of "complained" routes structured-only and drops the qualitative half. Logged, not hidden.
-    </p>
-  </div>
-</div>
-
-<!-- WHAT MAKES IT TRUSTWORTHY -->
-<div class="case-section">
-  <div class="section-label">// what makes it trustworthy</div>
-  <hr class="divider">
-
-  <div class="decision-block">
-    <h3>Semantic caching that respects identity</h3>
-    <p>
-      The cache key is a SHA-256 hash of the resolved intent plus the caller's identity — not the raw question text. "What did Acme spend last month?" and "Show me Acme's spending for last month" hit the same cache entry. But two different callers never share a filtered result. 74–89% latency reduction on cache hits.
-    </p>
+    <p><strong>Semantic Compiler.</strong> sqlglot expression builders turn the validated intent into SQL — graph traversal for joins, AST construction for predicates. No string concatenation anywhere. <em>Production:</em> add more join paths and aggregate functions to the semantic model as the warehouse grows.</p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <h3>Audit envelope on every response</h3>
-    <p>
-      Every answer ships with a trust receipt: the compiled SQL, the proven join path, whether the cache was hit, which notes were retrieved, which route was taken, and how long it took. A downstream consumer never has to take "trust me" as the only option.
-    </p>
+    <p><strong>Security Injection.</strong> After the LLM is done contributing anything, code walks the compiled AST and ANDs row-level predicates onto tables that carry a policy. An invalid identity raises an error outright — never a query that quietly returns zero rows. <em>Production:</em> wire to a real IAM provider instead of simulated tenant identities.</p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <h3>MCP integration</h3>
-    <p>
-      The gateway is exposed as a Model Context Protocol tool via FastMCP. Any MCP-aware client — Claude Code, Cursor, or a custom agent — can call it through the same compile → security → execute pipeline. It's not locked to this project's UI.
-    </p>
+    <p><strong>BigQuery Execution.</strong> The compiled, security-injected query runs against live BigQuery with the same guardrails as the original agent (cost ceiling, row cap). <em>Production:</em> add query queuing and priority lanes for expensive scans.</p>
   </div>
 
   <div class="decision-block" style="margin-top: 1rem;">
-    <h3>End-to-end observability</h3>
-    <p>
-      OpenTelemetry spans on every layer, exported to Langfuse. If tracing keys aren't configured, spans are still created — just not exported. Swapping to Datadog or your existing APM is a config change, not a code change.
-    </p>
+    <p><strong>Vector Search (RAG path).</strong> For unstructured questions, retrieves relevant support notes from a LanceDB vector store. For stacked questions ("find customers who complained about billing, then show their revenue"), retrieval resolves <em>who</em>, then the compiler builds a precise query scoped to exactly those IDs. <em>Production:</em> replace synthetic notes with a real support-ticket corpus; add reranking.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Synthesis Layer.</strong> Merges outputs from the structured and unstructured paths into one attributed response. The LLM words the answer; the data behind it is deterministic. <em>Production:</em> add citation links back to source notes and query results.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Audit Envelope.</strong> Every response ships with a trust receipt — compiled SQL, proven join path, cache hit/miss, retrieved note IDs, route taken, and latency. A caller never has to take "trust me" as the only option. <em>Production:</em> pipe into a compliance dashboard for audit trails.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>MCP Server.</strong> The gateway is exposed as a Model Context Protocol tool via FastMCP. Any MCP-aware client — not just this agent's UI — can call it through the same compile → security → guard → execute pipeline. <em>Production:</em> register as a standard tool in the organization's MCP registry.</p>
+  </div>
+
+  <div class="decision-block" style="margin-top: 1rem;">
+    <p><strong>Observability.</strong> OpenTelemetry spans on every layer, exported to Langfuse. <code>init_tracing()</code> with no keys is a documented no-op — spans are created, just not exported. <em>Production:</em> swap Langfuse for Datadog or your existing APM; it's a config change, not a code change.</p>
   </div>
 </div>
 
