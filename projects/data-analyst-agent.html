@@ -70,7 +70,56 @@
     <img src="/projects/semantic-gateway-architecture.png" alt="Governed Text-to-SQL architecture — structured path compiles SQL from a certified glossary, unstructured path retrieves from LanceDB, both merge in a synthesis layer with an audit envelope" style="width: 100%; max-width: 960px; display: block; margin: 0 auto;">
   </div>
 
-  <h3 style="color: var(--accent); margin-top: 2rem; font-family: 'JetBrains Mono', monospace; font-size: 14px;">Each layer, what it does, and how it scales</h3>
+  <h3 style="color: var(--accent); margin-top: 2rem; font-family: 'JetBrains Mono', monospace; font-size: 14px;">Where this sits</h3>
+
+  <p>
+    This is a <strong>Universal Semantic Layer</strong> — the same pattern behind Airbnb's Minerva, Cube, and dbt's Semantic Layer. Instead of letting each consumer (a dashboard, an agent, an API) re-derive business logic by querying raw tables, a single middleware owns the metric definitions, compiles governed queries, and serves consistent results to any surface.
+  </p>
+
+  <div style="overflow-x: auto; margin: 1.5rem 0;">
+    <table class="numbers-table" style="min-width: 540px;">
+      <thead>
+        <tr>
+          <th style="text-align: left;">Layer</th>
+          <th style="text-align: left;">What it owns</th>
+          <th style="text-align: left;">Components</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Consumption</strong></td>
+          <td>Who calls the system</td>
+          <td>MCP Server, FastAPI, any MCP-aware client</td>
+        </tr>
+        <tr>
+          <td><strong>Modeling</strong></td>
+          <td>Where metrics are defined and compiled</td>
+          <td>semantic_model.yaml, Semantic Compiler, Intent Extraction</td>
+        </tr>
+        <tr>
+          <td><strong>Serving</strong></td>
+          <td>How queries are executed and secured</td>
+          <td>Router, Security Injection, BigQuery Execution, Vector Search, Synthesis</td>
+        </tr>
+        <tr>
+          <td><strong>Caching</strong></td>
+          <td>Avoid redundant warehouse hits</td>
+          <td>Semantic Cache (SHA-256 intent + identity)</td>
+        </tr>
+        <tr>
+          <td><strong>Storage</strong></td>
+          <td>Where the data lives</td>
+          <td>BigQuery (structured), LanceDB (unstructured)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p style="color: var(--muted); font-size: 14px;">
+    Observability and the Audit Envelope are cross-cutting — they span every layer, not a step in the pipeline.
+  </p>
+
+  <h3 style="color: var(--accent); margin-top: 2rem; font-family: 'JetBrains Mono', monospace; font-size: 14px;">Each component, what it does, and how it scales</h3>
 
   <div class="decision-block" style="margin-top: 1.5rem;">
     <p><strong>Router.</strong> Regex classifier that looks at question shape — does it ask for a number, a note, or both? Free, instant, and every decision traces to the exact pattern that fired. <em>Production:</em> swap for a lightweight LLM classifier when questions get ambiguous enough that keywords miss.</p>
